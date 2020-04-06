@@ -1,2 +1,2 @@
 # os_task_scheduler
-Library for spinning up Openstack stacks and scheduling tasks to be perfomed on them
+Library that spinup and manage Openstack stacks and schedule tasks to be performed on them
