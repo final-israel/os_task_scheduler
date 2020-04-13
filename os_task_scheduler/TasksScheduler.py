@@ -1622,10 +1622,16 @@ class TasksScheduler(object):
         if self._ssh_password:
             extra_vars.append("ansible_ssh_pass={}".format(self._ssh_password))
 
-        extra_vars.append("gather_timeout=60")
         extra_vars.append("host_key_checking=False")
         extra_vars_str = " ".join(extra_vars)
 
+        ssh_args = [
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "StrictHostKeyChecking=no",
+        ]
+        ssh_args_str = " ".join(ssh_args)
         cmd = ["ansible-playbook"]
         if self._verbose:
             cmd.append("-vvv")
@@ -1634,20 +1640,21 @@ class TasksScheduler(object):
             [
                 "-i",
                 host + ",",
-                "--ssh-common-args=-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "
-                "-o PreferredAuthentications=password -o PubkeyAuthentication=no",
                 "--timeout",
                 "60",
-                f"--extra-vars={extra_vars_str}",
+                "--ssh-common-args",
+                ssh_args_str,
+                "--extra-vars",
+                extra_vars_str,
                 playbook_path,
             ]
         )
 
         if self._become:
-            cmd.insert(-3, "-b")
+            cmd.insert(-2, "-b")
         if host == "127.0.0.1":
-            cmd.insert(-3, "--connection")
-            cmd.insert(-3, "local")
+            cmd.insert(-2, "--connection")
+            cmd.insert(-2, "local")
 
         return await self._run_cmd(cmd, queue_id=stack_name)
 
