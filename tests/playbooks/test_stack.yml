@@ -1,0 +1,196 @@
+heat_template_version: 2013-05-23
+
+description: >
+  HOT template to create a new neutron network plus a router to the public
+  network, and for deploying two servers into the new network. The template also
+  assigns floating IP addresses to each server so they are routable from the
+  public network.
+
+parameters:
+  public_net: # external network for router and floating IPs
+    type: string
+    description: >
+      ID or name of public network for which floating IP addresses will be allocated
+    default: public
+  private_net_name: # The cloud private network
+    type: string
+    description: Name of private network to be created
+    default: private-net
+  private_net_cidr: # subnet definition
+    type: string
+    description: Private network address (CIDR notation)
+    default: 192.168.0.0/24
+  private_net_gateway:
+    type: string
+    description: Private network gateway address
+    default: 192.168.0.1
+  private_net_pool_start:
+    type: string
+    description: Start of private network IP address allocation pool
+    default: 192.168.0.5
+  private_net_pool_end:
+    type: string
+    description: End of private network IP address allocation pool
+    default: 192.168.0.105
+  dns:
+    type: comma_delimited_list
+    label: DNS nameservers
+    description: Comma separated list of DNS nameservers.
+    default: '208.67.220.220,208.67.222.222'
+  flavor:
+    type: string
+    default: 'v2-standard-1'
+  image:
+    type: string
+    default: 'Ubuntu 18.04 LTS (x86_64) [2018-08-23]'
+
+resources:
+  private_net: # define a new private network
+    type: OS::Neutron::Net
+    properties:
+      name: { get_param: private_net_name }
+
+  private_subnet: # define a subnet
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: private_net }
+      cidr: { get_param: private_net_cidr }
+      gateway_ip: { get_param: private_net_gateway }
+      allocation_pools:
+        - start: { get_param: private_net_pool_start }
+          end: { get_param: private_net_pool_end }
+      dns_nameservers: { get_param: dns }
+
+  router: # define router to external
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: { get_param: public_net }
+
+  router_interface: # link it with private network
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet_id: { get_resource: private_subnet }
+
+  run_bash:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: |
+        #!/bin/bash
+        mkdir -p /tmp/tstout
+
+  setup_users:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        ssh_pwauth: yes
+        users:
+          - name: tstuser
+            sudo: ALL=(ALL) NOPASSWD:ALL
+            groups: users, admin, sudo
+            lock_passwd: false
+            passwd: $6$xyz$5QJcMp3edLayr8jU.VewAnGv9K51qtHB44YCiwYMly7c/.BK1XvaENmSfatKX8gtj/RkWUZhRvvRsX97N5CUi/
+
+  install_extra_packages:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        packages:
+          - sshpass
+
+  server_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+        - config: {get_resource: setup_users}
+        - config: {get_resource: install_extra_packages}
+        - config: {get_resource: run_bash}
+
+  server1:
+    type: OS::Nova::Server
+    properties:
+      name: server1
+      flavor: { get_param: flavor }
+      networks:
+        - port: { get_resource: server1_port }
+      block_device_mapping: [
+      { delete_on_termination: true,
+        device_name: vda,
+        volume_id: { get_resource: server1_Root_Disk } }
+      ]
+      user_data_format: RAW
+      user_data:
+        get_resource: server_init
+
+  server1_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_resource: private_net }
+      fixed_ips:
+        - subnet_id: { get_resource: private_subnet }
+
+  server1_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: public_net }
+      port_id: { get_resource: server1_port }
+
+  server1_Root_Disk:
+    type: OS::Cinder::Volume
+    properties:
+      name: "Server 1 - Root Disk"
+      image: { get_param: image }
+      size: 10
+
+  server2:
+    type: OS::Nova::Server
+    properties:
+      name: server2
+      flavor: { get_param: flavor }
+      networks:
+        - port: { get_resource: server2_port }
+      block_device_mapping: [
+      { delete_on_termination: true,
+        device_name: vda,
+        volume_id: { get_resource: server2_Root_Disk } }
+      ]
+      user_data_format: RAW
+      user_data:
+        get_resource: server_init
+
+  server2_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_resource: private_net }
+      fixed_ips:
+        - subnet_id: { get_resource: private_subnet }
+
+  server2_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: public_net }
+      port_id: { get_resource: server2_port }
+
+  server2_Root_Disk:
+    type: OS::Cinder::Volume
+    properties:
+      name: "Server 2 - Root Disk"
+      image: { get_param: image }
+      size: 10
+
+outputs: # return private and floating ips of the VMs
+  server1_internal_ip:
+    description: IP address of server1 in private network
+    value: { get_attr: [ server1, first_address ] }
+  server1_public_ip:
+    description: Floating IP address of server1 in public network
+    value: { get_attr: [ server1_floating_ip, floating_ip_address ] }
+  server2_internal_ip:
+    description: IP address of server2 in private network
+    value: { get_attr: [ server2, first_address ] }
+  server2_public_ip:
+    description: Floating IP address of server2 in public network
+    value: { get_attr: [ server2_floating_ip, floating_ip_address ] }
+

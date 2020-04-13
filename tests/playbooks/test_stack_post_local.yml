@@ -1,0 +1,12 @@
+---
+- name: get list of outputs
+  local_action: shell find /tmp -name "*.err_os_scheduler"
+  register: path_files
+  ignore_errors: yes
+- name: collect outputs
+  local_action:
+    module: fetch
+    src: "{{ item }}"
+    dest: ~/test_end_2_end/errors
+  with_items: "{{ path_files.stdout_lines }}"
+

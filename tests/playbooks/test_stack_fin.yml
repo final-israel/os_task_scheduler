@@ -1,0 +1,10 @@
+---
+- name: get list of outputs
+  shell: find /tmp/tstout -name "*.out_os_scheduler"
+  register: path_files
+- name: collect outputs
+  fetch:
+    src: "{{ item }}"
+    dest: ~/test_end_2_end/outputs
+  with_items: "{{ path_files.stdout_lines }}"
+
