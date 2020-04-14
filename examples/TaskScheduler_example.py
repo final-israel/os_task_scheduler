@@ -57,7 +57,7 @@ def main():
         stack_reuse=True,
         stack_create_params={"private_net_name": "private_net_scheduler"},
         greed_create_factor=1,
-        stack_limit=2,
+        stack_limit=5,
     )
 
     MANAGER = manager

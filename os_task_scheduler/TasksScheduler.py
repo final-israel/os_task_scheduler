@@ -1676,6 +1676,13 @@ class TasksScheduler(object):
             return
 
         job = self._pending_jobs.pop(0)
+        if "job" in self._stacks[stack_name]:
+            prevjob = self._stacks[stack_name]["job"]
+            self._handling_jobs.remove(prevjob)
+            logger.info(
+                "Stack {1} finished running job {0}".format(prevjob, stack_name)
+            )
+
         self._handling_jobs.append(job)
         try:
             await self._run_a_job(stack_name, job)
@@ -1687,8 +1694,11 @@ class TasksScheduler(object):
 
             self._pending_jobs.append(job)
 
-        self._handling_jobs.remove(job)
-        logger.info("Finished running job {0}".format(job))
+        if job == self._stacks[stack_name]["job"]:
+            self._handling_jobs.remove(job)
+            logger.info(
+                "Stack {1} finished running last job {0}".format(job, stack_name)
+            )
 
     async def _wait_ready_stack(self, stack_name):
         logger = logging.getLogger(__name__)
