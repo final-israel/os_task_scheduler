@@ -182,9 +182,9 @@ class TasksScheduler(object):
     WAIT_CREATE_AFTER_FAIL = 60 * 5
     MAX_FAILED_STACKS = 10
     CONTROLLERS_COUNT = 3
-    DEFAULT_MAX_PENDING_CREATES = CONTROLLERS_COUNT * 2
+    DEFAULT_MAX_PENDING_CREATES = 2
     CONSECUTIVE_READY_FAILS = 10
-    MAX_GLOBAL_IN_PROGRESS = 2 * DEFAULT_MAX_PENDING_CREATES
+    MAX_GLOBAL_IN_PROGRESS = 6
     RABBITMQ_HOST = "tscheduler-mq"
 
     # Openstack states that we handle
@@ -215,13 +215,13 @@ class TasksScheduler(object):
         stack_limit=0,
         stack_create_params=None,
         auto_wait_on_internal_ips=True,
-        ssh_timeout_sec=900,
+        ssh_timeout_sec=120,
         extra_stack_create_params=None,
-        greed_create_factor=1,
         max_idle_hours=6,
         verbose=False,
         rabbit_host=RABBITMQ_HOST,
         debug_stack="",
+        initial_max_pending_creates=DEFAULT_MAX_PENDING_CREATES,
     ):
         """
         Init the job manager class enabling scheduling jobs and waiting for
@@ -310,7 +310,6 @@ class TasksScheduler(object):
         self._ssh_timeout_sec = ssh_timeout_sec
         self._auto_wait_on_internal_ips = auto_wait_on_internal_ips
         self._stack_create_params = stack_create_params
-        self._greed_create_factor = greed_create_factor
         self._max_idle_seconds = max_idle_hours * 60 * 60
         try:
             self._rabbit_connection = pika.BlockingConnection(
@@ -388,6 +387,7 @@ class TasksScheduler(object):
         self._duplicate_checked = False
         self._next_call_can_check_duplicates = False
         self._skip_check_duplicates = False
+        self._initial_max_pending_creates = initial_max_pending_creates
         self._re_init()
 
         self._debug_stack = debug_stack
@@ -418,7 +418,7 @@ class TasksScheduler(object):
         self._cmd_task = asyncio.ensure_future(self._cmds_handle(), loop=self._loop)
 
         self._stack_count_cache = None
-        self._max_pendings_create = self.DEFAULT_MAX_PENDING_CREATES
+        self._max_pendings_create = self._initial_max_pending_creates
         self._last_failed_create_time = 0
         self._global_stats = self.get_global_scheduler_stats()
         self._init_state = True
@@ -2061,10 +2061,7 @@ class TasksScheduler(object):
                 # We dont need to try again for long time
                 # (probably out of resource)
                 self._last_failed_create_time = self._loop.time()
-                if self._max_pendings_create > 1 + self._greed_create_factor:
-                    self._max_pendings_create -= self._greed_create_factor
-                else:
-                    self._max_pendings_create = 1
+                self._max_pendings_create = 1
             else:
                 # stack changed to error
                 logger.error(
@@ -2085,9 +2082,9 @@ class TasksScheduler(object):
             # stack created we should wait for it to be ready
             self._stacks[stack_name]["create_state"] = True
             self._set_stack_state(stack_name, TasksScheduler.STACK_STATUS_CREATED)
-            self._max_pendings_create += self._greed_create_factor
-            if self._max_pendings_create > self.DEFAULT_MAX_PENDING_CREATES:
-                self._max_pendings_create = self.DEFAULT_MAX_PENDING_CREATES
+            self._max_pendings_create += 1
+            if self._max_pendings_create > self._initial_max_pending_creates:
+                self._max_pendings_create = self._initial_max_pending_creates
             if self.MAX_GLOBAL_IN_PROGRESS <= self._global_stats["InProgressCount"]:
                 self._max_pendings_create = 1
 
@@ -2249,14 +2246,17 @@ class TasksScheduler(object):
             print("  tasks:", file=f)
             print("    - name: wait for SSH connectivity with access node", file=f)
             print(
-                "      local_action: wait_for port=22 host={{{{ inventory_hostname }}}} state=started "
-                "search_regex=OpenSSH sleep=10 delay=10 timeout={}".format(
+                "      local_action: wait_for port=22 host={{ inventory_hostname }} state=started "
+                "search_regex=OpenSSH sleep=10 delay=10",
+                file=f,
+            )
+            print("    - name: wait for system to become reachable", file=f)
+            print(
+                "      wait_for_connection: delay=10 sleep=10 timeout={}".format(
                     self._ssh_timeout_sec
                 ),
                 file=f,
             )
-            print("    - name: wait for system to become reachable", file=f)
-            print("      wait_for_connection: delay=10 sleep=10", file=f)
             print("    - name: gather facts", file=f)
             print("      setup:", file=f)
             print("    - name: wait for cloud-init finish", file=f)

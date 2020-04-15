@@ -486,8 +486,6 @@ def test_end_2_end(
 
     logger = logging.getLogger(__name__)
     logger.info("Start")
-    os.system("rm -f /tmp/*.out_os_scheduler")
-    os.system("rm -f /tmp/*.err_os_scheduler")
     MANAGER = manager_stack_e2e
 
     if os.path.exists(e2e_out_folder):
@@ -500,11 +498,11 @@ def test_end_2_end(
 
     ok_path = create_script(
         "script_ok.sh",
-        "sleep 2 && sleep $((RANDOM % 5)) && echo Im Job $1 > /tmp/$1.out_os_scheduler",
+        "sleep 2 && sleep $((RANDOM % 5)) && echo Im Job $1 > /var/tstdir/$1.out_os_scheduler",
     )
     fail_path = create_script(
         "script_fail.sh",
-        "sleep 2 && sleep $((RANDOM % 5)) && echo Im Job $1 > /tmp/$1.err_os_scheduler; exit 1",
+        "sleep 2 && sleep $((RANDOM % 5)) && echo Im Job $1 > /var/tstdir/$1.err_os_scheduler; exit 1",
     )
     stacks_2_create = 10
     for job_i in range(stacks_2_create):

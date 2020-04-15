@@ -1,6 +1,6 @@
 ---
 - name: get list of outputs
-  local_action: shell find /tmp -name "*.err_os_scheduler"
+  local_action: shell find /var/tstdir -name "*.err_os_scheduler"
   register: path_files
   ignore_errors: yes
 - name: collect outputs

@@ -56,8 +56,7 @@ def main():
         job_done_cb=job_done_cb,
         stack_reuse=True,
         stack_create_params={"private_net_name": "private_net_scheduler"},
-        greed_create_factor=1,
-        stack_limit=5,
+        stack_limit=40,
     )
 
     MANAGER = manager
@@ -79,7 +78,7 @@ def main():
         "script.sh",  # Our script just sleep and echo their id and server2 IP
         [
             "sleep $((RANDOM % 60))",
-            "echo Im Job $1 and server2_public_ip is $server2_public_ip > /tmp/$1.out_os_scheduler",
+            "echo Im Job $1 and server2_public_ip is $server2_public_ip > /var/tstdir/$1.out_os_scheduler",
             "exit 0",
         ],
     )

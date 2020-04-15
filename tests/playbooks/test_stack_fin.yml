@@ -1,6 +1,6 @@
 ---
 - name: get list of outputs
-  shell: find /tmp/tstout -name "*.out_os_scheduler"
+  shell: find /var/tstdir -name "*.out_os_scheduler"
   register: path_files
 - name: collect outputs
   fetch:

@@ -43,6 +43,9 @@ parameters:
   image:
     type: string
     default: 'Ubuntu 18.04 LTS (x86_64) [2018-08-23]'
+  key_name:
+    type: string
+    default: 'ZOHAR-LIN-VPC'
 
 resources:
   private_net: # define a new private network
@@ -78,8 +81,10 @@ resources:
     properties:
       group: ungrouped
       config: |
-        #!/bin/bash
-        mkdir -p /tmp/tstout
+        #!/bin/bash -x
+        mkdir /var/tstdir
+        chmod a+rw /var/tstdir
+        echo just for test
 
   setup_users:
     type: OS::Heat::CloudConfig
@@ -89,7 +94,7 @@ resources:
         users:
           - name: tstuser
             sudo: ALL=(ALL) NOPASSWD:ALL
-            groups: users, admin, sudo
+            groups: users,sudo
             lock_passwd: false
             passwd: $6$xyz$5QJcMp3edLayr8jU.VewAnGv9K51qtHB44YCiwYMly7c/.BK1XvaENmSfatKX8gtj/RkWUZhRvvRsX97N5CUi/
 
@@ -100,13 +105,24 @@ resources:
         packages:
           - sshpass
 
+  reboot:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        power_state:
+          mode: reboot
+          message: Heat reboot Bye Bye
+          timeout: 120
+          condition: True
+
   server_init:
     type: OS::Heat::MultipartMime
     properties:
       parts:
+        - config: {get_resource: run_bash}
         - config: {get_resource: setup_users}
         - config: {get_resource: install_extra_packages}
-        - config: {get_resource: run_bash}
+        - config: {get_resource: reboot}
 
   server1:
     type: OS::Nova::Server
@@ -120,6 +136,7 @@ resources:
         device_name: vda,
         volume_id: { get_resource: server1_Root_Disk } }
       ]
+      key_name: { get_param: key_name }
       user_data_format: RAW
       user_data:
         get_resource: server_init
@@ -156,6 +173,7 @@ resources:
         device_name: vda,
         volume_id: { get_resource: server2_Root_Disk } }
       ]
+      key_name: { get_param: key_name }
       user_data_format: RAW
       user_data:
         get_resource: server_init
