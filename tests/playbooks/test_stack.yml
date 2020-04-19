@@ -11,7 +11,7 @@ parameters:
     type: string
     description: >
       ID or name of public network for which floating IP addresses will be allocated
-    default: public
+    default: Ext-Net
   private_net_name: # The cloud private network
     type: string
     description: Name of private network to be created
@@ -39,10 +39,10 @@ parameters:
     default: '208.67.220.220,208.67.222.222'
   flavor:
     type: string
-    default: 'v2-standard-1'
+    default: 's1-4'
   image:
     type: string
-    default: 'Ubuntu 18.04 LTS (x86_64) [2018-08-23]'
+    default: 'Ubuntu 18.04'
   key_name:
     type: string
     default: 'ZOHAR-LIN-VPC'
@@ -131,11 +131,6 @@ resources:
       flavor: { get_param: flavor }
       networks:
         - port: { get_resource: server1_port }
-      block_device_mapping: [
-      { delete_on_termination: true,
-        device_name: vda,
-        volume_id: { get_resource: server1_Root_Disk } }
-      ]
       key_name: { get_param: key_name }
       user_data_format: RAW
       user_data:
@@ -154,13 +149,6 @@ resources:
       floating_network: { get_param: public_net }
       port_id: { get_resource: server1_port }
 
-  server1_Root_Disk:
-    type: OS::Cinder::Volume
-    properties:
-      name: "Server 1 - Root Disk"
-      image: { get_param: image }
-      size: 10
-
   server2:
     type: OS::Nova::Server
     properties:
@@ -168,11 +156,6 @@ resources:
       flavor: { get_param: flavor }
       networks:
         - port: { get_resource: server2_port }
-      block_device_mapping: [
-      { delete_on_termination: true,
-        device_name: vda,
-        volume_id: { get_resource: server2_Root_Disk } }
-      ]
       key_name: { get_param: key_name }
       user_data_format: RAW
       user_data:
@@ -190,13 +173,6 @@ resources:
     properties:
       floating_network: { get_param: public_net }
       port_id: { get_resource: server2_port }
-
-  server2_Root_Disk:
-    type: OS::Cinder::Volume
-    properties:
-      name: "Server 2 - Root Disk"
-      image: { get_param: image }
-      size: 10
 
 outputs: # return private and floating ips of the VMs
   server1_internal_ip:

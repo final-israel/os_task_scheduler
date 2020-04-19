@@ -1,5 +1,5 @@
 import pytest
-import OSTaskScheduler.TasksScheduler as TasksScheduler
+import os_task_scheduler.TasksScheduler as TasksScheduler
 import asyncio
 import subprocess
 import os
@@ -79,17 +79,6 @@ def check_service_exists(service_name):
     return proc.returncode == 0
 
 
-def login_to_docker_registry():
-    login_cmd = ["docker", "login", "-u", "groot", "-p", "fl0ra", "ilreg.dyn"]
-    proc = subprocess.Popen(
-        login_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
-    proc.wait(timeout=10)
-
-    if proc.returncode != 0:
-        raise ChildProcessError
-
-
 def remove_service(service_name):
     # stop container
     cmd = "docker stop {service_name}".format(service_name=service_name)
@@ -105,7 +94,6 @@ def remove_service(service_name):
 def run_rabbit():
     logger = logging.getLogger(__name__)
 
-    login_to_docker_registry()
     cmd = [
         "docker",
         "run",
@@ -118,7 +106,7 @@ def run_rabbit():
         "type=bind,src=/etc/localtime,dst=/etc/localtime,ro=false",
         "--name",
         "rabbitmq",
-        "ilreg.dyn/{0}:{1}".format("rabbitmq", "3.6.6-management"),
+        "rabbitmq:3-management",
     ]
     if check_service_exists("rabbitmq"):
         logger.info(
@@ -136,7 +124,7 @@ def run_rabbit():
     if proc.returncode != 0:
         raise ChildProcessError
 
-    time.sleep(10)
+    time.sleep(30)
 
     return proc
 
@@ -406,7 +394,8 @@ def test_stack_reuse(function_event_loop, manager_stack_reuse):
     delete_all_stacks(manager_stack_reuse)
 
     logger.info(manager_stack_reuse._stacks)
-    assert manager_stack_reuse.get_stack_count() == 1
+    assert len(pytest.reused_stack_names) == 2
+    assert pytest.reused_stack_names[0] == pytest.reused_stack_names[1]
 
     logger.info("End")
 
@@ -527,8 +516,6 @@ def test_end_2_end(
 
     total_outputs = sum([len(files) for r, d, files in os.walk(e2e_out_folder)])
     total_errors = sum([len(files) for r, d, files in os.walk(e2e_err_folder)])
-    # total_outputs = len(get_file_list_recursive(e2e_out_folder))
-    # total_errors = len(get_file_list_recursive(e2e_err_folder))
     total_jobs = manager_stack_e2e.get_job_total_count()
 
     assert total_outputs + total_errors == total_jobs

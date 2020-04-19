@@ -2,7 +2,7 @@ import pytest
 import logging
 import logging.handlers
 import os
-import OSTaskScheduler.TasksScheduler as TasksScheduler
+import os_task_scheduler.TasksScheduler as TasksScheduler
 
 
 def pytest_addoption(parser):
@@ -160,8 +160,8 @@ def manager_bad_flavour(template_path, ready_task_path, post_task_path, rabbit_s
         ready_tasks_file_path=ready_task_path,
         access_point_node_ref="server1_public_ip",
         name_prefix="scheduler4.test",
-        ssh_user="qa",
-        ssh_password="852456",
+        ssh_user="tstuser",
+        ssh_password="tstpass",
         extra_stack_create_params={"default_flavor": "non_existing_flavor"},
         stack_limit=1,
         rabbit_host="127.0.0.1",
@@ -203,6 +203,13 @@ def manager_with_rabbit(template_path, ready_task_path, post_task_path, rabbit_s
     return manager
 
 
+pytest.reused_stack_names = []
+
+
+def reuse_call_back(scheduler, job, stack_name):
+    pytest.reused_stack_names.append(stack_name)
+
+
 @pytest.fixture
 def manager_stack_reuse(template_path, ready_task_path, post_task_path, rabbit_service):
     manager = TasksScheduler.TasksScheduler(
@@ -215,6 +222,7 @@ def manager_stack_reuse(template_path, ready_task_path, post_task_path, rabbit_s
         stack_reuse=True,
         stack_limit=1,
         rabbit_host="127.0.0.1",
+        job_done_cb_v2=reuse_call_back,
     )
 
     manager._skip_check_duplicates = True

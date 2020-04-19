@@ -210,6 +210,7 @@ class TasksScheduler(object):
         ssh_password=None,
         become=False,
         job_done_cb=None,
+        job_done_cb_v2=None,
         stack_reuse=False,
         delete_on_failure=False,
         stack_limit=0,
@@ -299,6 +300,11 @@ class TasksScheduler(object):
         else:
             self._user_ready_tasks_file_path = None
         self._user_job_done_cb = job_done_cb
+        if job_done_cb != None:
+            logger.warning(
+                "DEPRECETED!!! Old job_done_cb detected please upgrade to v2"
+            )
+        self._user_job_done_cb_v2 = job_done_cb_v2
         self._stack_reuse = stack_reuse
 
         self._delete_on_failure = delete_on_failure
@@ -1651,10 +1657,10 @@ class TasksScheduler(object):
         )
 
         if self._become:
-            cmd.insert(-2, "-b")
+            cmd.insert(-1, "-b")
         if host == "127.0.0.1":
-            cmd.insert(-2, "--connection")
-            cmd.insert(-2, "local")
+            cmd.insert(-1, "--connection")
+            cmd.insert(-1, "local")
 
         return await self._run_cmd(cmd, queue_id=stack_name)
 
@@ -2002,6 +2008,19 @@ class TasksScheduler(object):
                 )
                 logger.exception(err_str)
 
+        if self._user_job_done_cb_v2:
+            try:
+                self._user_job_done_cb_v2(self, job, stack_name)
+            except Exception:
+                err_str = (
+                    "Job {0} on stack {1} Information "
+                    "below:\nSTDOUT:\n{2}\nSTDERR:\n{3}\n"
+                    "user_job_done_cb has thrown an exception".format(
+                        job_id, stack_name, stdout, stderr
+                    )
+                )
+                logger.exception(err_str)
+
         if not self._stack_reuse:
             await self._delete_stack(stack_name)
         elif (
@@ -2262,7 +2281,7 @@ class TasksScheduler(object):
             print("    - name: wait for cloud-init finish", file=f)
             print(
                 "      wait_for: path=/var/lib/cloud/instance/boot-finished state=present sleep=10 "
-                "delay=10 timeout={}".format(self._ssh_timeout_sec),
+                "delay=2 timeout={}".format(self._ssh_timeout_sec),
                 file=f,
             )
             if self._become and self._auto_wait_on_internal_ips:
@@ -2286,7 +2305,7 @@ class TasksScheduler(object):
                     )
                     print(
                         "      wait_for: port=22 host={} state=started search_regex=OpenSSH sleep=10 "
-                        "delay=10 timeout={}".format(value, self._ssh_timeout_sec),
+                        "delay=2 timeout={}".format(value, self._ssh_timeout_sec),
                         file=f,
                     )
                     print(
@@ -2294,7 +2313,7 @@ class TasksScheduler(object):
                         file=f,
                     )
                     print(
-                        "      shell: timeout 30 sshpass -p {} ssh "
+                        "      shell: timeout 10 sshpass -p {} ssh "
                         "-o UserKnownHostsFile=/dev/null "
                         "-o StrictHostKeyChecking=no {}@{} cat "
                         "/var/lib/cloud/instance/boot-finished".format(
@@ -2305,7 +2324,7 @@ class TasksScheduler(object):
                     print("      register: results", file=f)
                     print("      until: results.rc == 0", file=f)
                     print("      delay: 15", file=f)
-                    print("      retries: 40", file=f)
+                    print("      retries: 12", file=f)
 
             if ready_tasks_path is not None:
                 print("    - include: {}".format(ready_tasks_path), file=f)
